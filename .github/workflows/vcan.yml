@@ -16,14 +16,25 @@ jobs:
       matrix:
         runner: [ubuntu-24.04, ubuntu-26.04]
     steps:
-      - name: Load vcan and create interface
+      - name: Show runner and kernel
         shell: bash
         run: |
-          set -euo pipefail
           echo "Runner: $RUNNER_NAME"
           echo "Kernel: $(uname -r)"
+
+      - name: Load vcan module
+        shell: bash
+        run: |
           sudo modprobe vcan
+
+      - name: Create vcan0
+        shell: bash
+        run: |
           sudo ip link add dev vcan0 type vcan
+
+      - name: Bring up vcan0
+        shell: bash
+        run: |
           sudo ip link set dev vcan0 up
           ip -details link show dev vcan0
 
