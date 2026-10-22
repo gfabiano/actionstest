@@ -1,0 +1,51 @@
+name: Probe vcan on GitHub-hosted Ubuntu
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vcan:
+    name: vcan / ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-26.04]
+    steps:
+      - name: Load vcan and create interface
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Runner: $RUNNER_NAME"
+          echo "Kernel: $(uname -r)"
+          sudo modprobe vcan
+          sudo ip link add dev vcan0 type vcan
+          sudo ip link set dev vcan0 up
+          ip -details link show dev vcan0
+
+      - name: Exchange a CAN frame
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import socket
+          import struct
+
+          sender = socket.socket(socket.PF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
+          receiver = socket.socket(socket.PF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
+          try:
+              sender.bind(("vcan0",))
+              receiver.bind(("vcan0",))
+              receiver.settimeout(2)
+              frame = struct.pack("=IB3x8s", 0x123, 3, b"abc")
+              sender.send(frame)
+              received = receiver.recv(16)
+              assert received == frame, (received.hex(), frame.hex())
+              print("PASS: vcan0 transferred CAN frame 0x123 with payload abc")
+          finally:
+              sender.close()
+              receiver.close()
+          PY
